@@ -20,14 +20,42 @@ def transform_dataframe(df_input):
 
   # Split information for environment from benchmark to individual column
   benchmarks_in_isolated_environment = df.query("benchmark.str.contains('isolated_env')")['benchmark'].unique()
-  mask = df['benchmark'].isin(benchmarks_in_isolated_environment)
+  isolated_env_mask = df['benchmark'].isin(benchmarks_in_isolated_environment)
+  # Init all values with default
   df['environment'] = 'traccc'
-  df.loc[mask, 'environment'] = 'isolated'
-  
+  # Override selection
+  df.loc[isolated_env_mask, 'environment'] = 'isolated'
   # Remove the trailling caracters from isolated benchmark names
   prefix_offset = len('stdpar_')
-  sufix_offset = -len('_isolated_env')
-  df.loc[mask, 'benchmark'] = df.loc[mask, 'benchmark'].map(lambda row : row[prefix_offset:sufix_offset])
+  suffix_offset = -len('_isolated_env')
+  df.loc[isolated_env_mask, 'benchmark'] = df.loc[isolated_env_mask, 'benchmark'].map(lambda row : row[prefix_offset:suffix_offset])
+
+  # Split the execution mode from the benchmark (multicore/gpu/single-core)
+  cuda_benchmarks = df.query("benchmark.str.contains('cuda')")['benchmark']
+  cuda_mask = df['benchmark'].isin(cuda_benchmarks)
+  multicore_benchmarks = df.query("benchmark.str.contains('multicore')")['benchmark']
+  multicore_mask = df['benchmark'].isin(multicore_benchmarks)
+  gpu_benchmarks = df.query("benchmark.str.contains('gpu')")['benchmark']
+  gpu_mask = df['benchmark'].isin(gpu_benchmarks)
+  # Init all values with default
+  df['target_mode'] = 'single-core'
+  # Override selection
+  df.loc[cuda_mask, 'target_mode'] = 'gpu'
+  df.loc[gpu_mask, 'target_mode'] = 'gpu'
+  df.loc[multicore_mask, 'target_mode'] = 'multicore'
+
+  # Add column for technology (cuda/c++/stdpar)
+  cpp_benchmarks = df.query("benchmark.str.contains('seq_cca')")['benchmark']
+  cpp_mask = df['benchmark'].isin(cpp_benchmarks)
+  # Init all values with default
+  df['programming_model'] = 'stdpar'
+  # Override selection
+  df.loc[cuda_mask, 'programming_model'] = 'cuda'
+  df.loc[cpp_mask, 'programming_model'] = 'cpp'
+
+  # Strip the algorithm values to the relevant part
+  df['algorithm'] = df['algorithm'].map(lambda a : re.split('stdpar_', re.split('cca_', a)[-1])[-1])
+  df.loc[(df['algorithm']=='seq_cca'),'algorithm'] = 'sparse_ccl'
 
   # Update the dataset column to only include the mu value
   mu_value_offset = len('tt_bar')
@@ -46,6 +74,6 @@ def transform_dataframe(df_input):
   df = df.join(df_tait.set_index('dataset'), on='dataset')
 
   # Reorder columns in dataframe
-  df = df[['benchmark', 'environment', 'algorithm', 'dataset', 'activations', 'kernel_time', 'cpu_time', 'time_unit', 'iterations', 'repetitions']]
+  df = df[['benchmark', 'programming_model', 'target_mode', 'environment', 'algorithm', 'dataset', 'activations', 'kernel_time', 'cpu_time', 'time_unit', 'iterations', 'repetitions']]
 
   return df
