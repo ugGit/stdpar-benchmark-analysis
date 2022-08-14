@@ -73,7 +73,20 @@ def transform_dataframe(df_input):
   df_tait = pd.DataFrame.from_records(total_activations_in_dataset, columns=['dataset', 'activations'])
   df = df.join(df_tait.set_index('dataset'), on='dataset')
 
-  # Reorder columns in dataframe
-  df = df[['benchmark', 'programming_model', 'target_mode', 'environment', 'algorithm', 'dataset', 'activations', 'kernel_time', 'cpu_time', 'time_unit', 'iterations', 'repetitions']]
+  # Normalize data for single event in dataset
+  num_events = 10
+  df['activations'] = df['activations'] / num_events
+  df['kernel_time'] = df['kernel_time'] / num_events
+  df['cpu_time'] = df['cpu_time'] / num_events
 
+  # Extract and augment processor names
+  df['target'] = 'Intel Xeon Gold 5220'
+  df.loc[(df['target_mode']=='gpu'), 'target'] = 'Nvidia A6000'
+  geforce_benchmarks = df.query("benchmark.str.contains('geforce_2080')")['benchmark']
+  geforce_mask = df['benchmark'].isin(geforce_benchmarks)
+  df.loc[geforce_mask, 'target'] = 'Nvidia GeForce 2080'
+
+  # Reorder columns in dataframe
+  df = df[['benchmark', 'programming_model', 'target_mode', 'environment', 'target', 'algorithm', 'dataset', 'activations', 'kernel_time', 'cpu_time', 'time_unit', 'iterations', 'repetitions']]
+  
   return df
