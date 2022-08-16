@@ -1,6 +1,20 @@
 import pandas as pd
+import numpy as np
 import re
 
+# Extract the number of threads based on benchmark name, assuming patterns follow the style ..._tXY_[no_]overclock...
+def extract_number_of_threads(benchmark_name):
+    begin_thread_num_idx = benchmark_name.find('_t')+2
+    end_thread_num_idx = benchmark_name.find('_no_overclock') if benchmark_name.find('_no_overclock') > 0 else benchmark_name.find('_overclocked')
+    return (int)(benchmark_name[begin_thread_num_idx:end_thread_num_idx])
+
+# Extract the size of the partitions used based on algorithm name, assuming patterns follow the style ..._partition_XY.
+def extract_partition_size(algorithm_name):
+    prefix = '_partition_'
+    partition_size_offset = algorithm_name.find(prefix) + len(prefix)
+    return algorithm_name[partition_size_offset:]
+
+# Perform the whole preprocessing
 def transform_dataframe(df_input):
   # Work on a copy of the input df
   df = df_input.copy()
@@ -57,6 +71,20 @@ def transform_dataframe(df_input):
   df['algorithm'] = df['algorithm'].map(lambda a : re.split('stdpar_', re.split('cca_', a)[-1])[-1])
   df.loc[(df['algorithm']=='seq_cca'),'algorithm'] = 'sparse_ccl'
 
+  # Extract and augment the dataframe with the partition size used for SV algorithms
+  param_tuning_benchmarks = df.query("algorithm.str.contains('_partition_')")['algorithm']
+  param_tuning_mask = df['algorithm'].isin(param_tuning_benchmarks)
+  # Set default for all algorithms 
+  df['partition_size'] = 1024 
+  # Reset all sparse ccl invocations which are parallelized on detector level module
+  df.loc[(df['algorithm'] == 'sparse_ccl'), 'partition_size'] = np.NaN 
+  # Extract the partition size for parameter tuning related benchmarks
+  df.loc[param_tuning_mask, 'partition_size'] = df.loc[param_tuning_mask, 'algorithm'].map(extract_partition_size) 
+  # Set suitable format
+  df['partition_size'] = pd.to_numeric(df['partition_size']).astype('Int16')
+  # Remove extra from algorithms column
+  df.loc[param_tuning_mask, 'algorithm'] = df.loc[param_tuning_mask, 'algorithm'].map(lambda x : x[:x.find('_partition')])
+
   # Update the dataset column to only include the mu value
   mu_value_offset = len('tt_bar')
   df['dataset'] = df['dataset'].map(lambda row : re.split('/', row)[-2][mu_value_offset:])
@@ -81,12 +109,19 @@ def transform_dataframe(df_input):
 
   # Extract and augment processor names
   df['target'] = 'Intel Xeon Gold 5220'
-  df.loc[(df['target_mode']=='gpu'), 'target'] = 'Nvidia A6000'
+  df.loc[(df['target_mode']=='gpu'), 'target'] = 'NVIDIA A6000'
   geforce_benchmarks = df.query("benchmark.str.contains('geforce_2080')")['benchmark']
   geforce_mask = df['benchmark'].isin(geforce_benchmarks)
-  df.loc[geforce_mask, 'target'] = 'Nvidia GeForce 2080'
+  df.loc[geforce_mask, 'target'] = 'NVIDIA GeForce 2080'
+
+  # Extract the number of CPU threads used
+  overclock_benchmarks = df.query("benchmark.str.contains('overclock')")['benchmark']
+  overclock_mask = df['benchmark'].isin(overclock_benchmarks)
+  df['cpu_threads'] = 1
+  df.loc[multicore_mask, 'cpu_threads'] = 72
+  df.loc[overclock_mask, 'cpu_threads'] = df.loc[overclock_mask, 'benchmark'].map(extract_number_of_threads)
 
   # Reorder columns in dataframe
-  df = df[['benchmark', 'programming_model', 'target_mode', 'environment', 'target', 'algorithm', 'dataset', 'activations', 'kernel_time', 'cpu_time', 'time_unit', 'iterations', 'repetitions']]
+  df = df[['benchmark', 'programming_model', 'target_mode', 'cpu_threads', 'environment', 'target', 'algorithm', 'partition_size', 'dataset', 'activations', 'kernel_time', 'cpu_time', 'time_unit', 'iterations', 'repetitions']]
   
   return df
