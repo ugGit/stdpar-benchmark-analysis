@@ -114,14 +114,21 @@ def transform_dataframe(df_input):
   geforce_mask = df['benchmark'].isin(geforce_benchmarks)
   df.loc[geforce_mask, 'target'] = 'NVIDIA GeForce 2080'
 
-  # Extract the number of CPU threads used
+  # Extract the number of CPU cores used
   overclock_benchmarks = df.query("benchmark.str.contains('overclock')")['benchmark']
   overclock_mask = df['benchmark'].isin(overclock_benchmarks)
-  df['cpu_threads'] = 1
-  df.loc[multicore_mask, 'cpu_threads'] = 72
-  df.loc[overclock_mask, 'cpu_threads'] = df.loc[overclock_mask, 'benchmark'].map(extract_number_of_threads)
+  df['cpu_cores'] = 1
+  df.loc[multicore_mask, 'cpu_cores'] = 72
+  df.loc[overclock_mask, 'cpu_cores'] = df.loc[overclock_mask, 'benchmark'].map(extract_number_of_threads)
+
+  # Add Core Efficiency score
+  df['computing_units'] = df['cpu_cores']
+  df.loc[(gpu_mask & ~geforce_mask), 'computing_units'] = 10752 # A6000
+  df.loc[(gpu_mask & geforce_mask), 'computing_units'] = 3072 # GeForce2080
+  df['omega'] = (df['kernel_time'] / df['activations']) * df['computing_units'] 
+  df['omega_alt'] = (df['activations'] / df['computing_units']) / df['kernel_time'] # alternative calculation, different meaning
 
   # Reorder columns in dataframe
-  df = df[['benchmark', 'programming_model', 'target_mode', 'cpu_threads', 'environment', 'target', 'algorithm', 'partition_size', 'dataset', 'activations', 'kernel_time', 'cpu_time', 'time_unit', 'iterations', 'repetitions']]
+  df = df[['benchmark', 'programming_model', 'target_mode', 'cpu_cores', 'environment', 'target', 'algorithm', 'partition_size', 'omega', 'omega_alt', 'dataset', 'activations', 'kernel_time', 'cpu_time', 'time_unit', 'iterations', 'repetitions']]
   
   return df
