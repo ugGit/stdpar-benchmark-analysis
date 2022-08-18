@@ -52,20 +52,20 @@ def transform_dataframe(df_input):
   gpu_benchmarks = df.query("benchmark.str.contains('gpu')")['benchmark']
   gpu_mask = df['benchmark'].isin(gpu_benchmarks)
   # Init all values with default
-  df['target_mode'] = 'single-core'
+  df['target_mode'] = 'Single-core CPU'
   # Override selection
-  df.loc[cuda_mask, 'target_mode'] = 'gpu'
-  df.loc[gpu_mask, 'target_mode'] = 'gpu'
-  df.loc[multicore_mask, 'target_mode'] = 'multicore'
+  df.loc[cuda_mask, 'target_mode'] = 'GPU'
+  df.loc[gpu_mask, 'target_mode'] = 'GPU'
+  df.loc[multicore_mask, 'target_mode'] = 'Multicore CPU'
 
   # Add column for technology (cuda/c++/stdpar)
   cpp_benchmarks = df.query("benchmark.str.contains('seq_cca')")['benchmark']
   cpp_mask = df['benchmark'].isin(cpp_benchmarks)
   # Init all values with default
-  df['programming_model'] = 'stdpar'
+  df['programming_model'] = 'std::par'
   # Override selection
-  df.loc[cuda_mask, 'programming_model'] = 'cuda'
-  df.loc[cpp_mask, 'programming_model'] = 'cpp'
+  df.loc[cuda_mask, 'programming_model'] = 'CUDA'
+  df.loc[cpp_mask, 'programming_model'] = 'C++'
 
   # Strip the algorithm values to the relevant part
   df['algorithm'] = df['algorithm'].map(lambda a : re.split('stdpar_', re.split('cca_', a)[-1])[-1])
@@ -108,11 +108,11 @@ def transform_dataframe(df_input):
   df['cpu_time'] = df['cpu_time'] / num_events
 
   # Extract and augment processor names
-  df['target'] = 'Intel Xeon Gold 5220'
-  df.loc[(df['target_mode']=='gpu'), 'target'] = 'NVIDIA A6000'
+  df['target'] = 'Xeon 5220'
+  df.loc[(df['target_mode']=='gpu'), 'target'] = 'A6000'
   geforce_benchmarks = df.query("benchmark.str.contains('geforce_2080')")['benchmark']
   geforce_mask = df['benchmark'].isin(geforce_benchmarks)
-  df.loc[geforce_mask, 'target'] = 'NVIDIA GeForce 2080'
+  df.loc[geforce_mask, 'target'] = 'GeForce 2080'
 
   # Extract the number of CPU cores used
   overclock_benchmarks = df.query("benchmark.str.contains('overclock')")['benchmark']
@@ -127,6 +127,12 @@ def transform_dataframe(df_input):
   df.loc[(gpu_mask & geforce_mask), 'computing_units'] = 3072 # GeForce2080
   df['omega'] = (df['kernel_time'] / df['activations']) * df['computing_units'] 
   df['omega_alt'] = (df['activations'] / df['computing_units']) / df['kernel_time'] # alternative calculation, different meaning
+
+  # Replace values with proper ones more suited for report
+  df.loc[(df['algorithm'] == 'sparse_ccl'), 'algorithm'] = 'SparseCCL'
+  df.loc[(df['algorithm'] == 'simplified_sv'), 'algorithm'] = 'SimplifiedSV'
+  df.loc[(df['algorithm'] == 'fast_sv_2'), 'algorithm'] = 'FastSV'
+  df = df[df['algorithm'] != 'fast_sv_1'] # Filter all fast sv 1 values
 
   # Reorder columns in dataframe
   df = df[['benchmark', 'programming_model', 'target_mode', 'cpu_cores', 'environment', 'target', 'algorithm', 'partition_size', 'omega', 'omega_alt', 'dataset', 'activations', 'kernel_time', 'cpu_time', 'time_unit', 'iterations', 'repetitions']]
