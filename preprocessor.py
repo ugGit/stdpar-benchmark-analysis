@@ -109,7 +109,7 @@ def transform_dataframe(df_input):
 
   # Extract and augment processor names
   df['target'] = 'Xeon 5220'
-  df.loc[(df['target_mode']=='gpu'), 'target'] = 'A6000'
+  df.loc[(df['target_mode']=='GPU'), 'target'] = 'A6000'
   geforce_benchmarks = df.query("benchmark.str.contains('geforce_2080')")['benchmark']
   geforce_mask = df['benchmark'].isin(geforce_benchmarks)
   df.loc[geforce_mask, 'target'] = 'GeForce 2080'
